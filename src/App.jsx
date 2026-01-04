@@ -143,21 +143,21 @@ export default function App() {
     };
   }, []);
 
-  const handleLogin = async (name, studentId) => {
+  const handleLogin = async (name, phoneNumber) => {
     const newUser = {
       name,
-      studentId,
+      phoneNumber,
       avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`
     };
 
     const { data: profile } = await supabase
       .from('profiles')
       .select('*')
-      .eq('student_id', studentId)
+      .eq('student_id', phoneNumber)
       .single();
 
     if (!profile) {
-      const safeHex = Array.from(studentId)
+      const safeHex = Array.from(phoneNumber)
         .map(c => c.charCodeAt(0).toString(16))
         .join('')
         .slice(0, 12)
@@ -165,7 +165,7 @@ export default function App() {
       const pseudoId = `00000000-0000-0000-0000-${safeHex}`;
 
       await supabase.from('profiles').insert([
-        { id: pseudoId, student_id: studentId, full_name: name, role: studentId === 'admin123' ? 'admin' : 'student' }
+        { id: pseudoId, student_id: phoneNumber, full_name: name, role: phoneNumber === 'admin123' ? 'admin' : 'student' }
       ]);
       newUser.id = pseudoId;
     } else {
@@ -173,7 +173,7 @@ export default function App() {
     }
 
     setUser(newUser);
-    setIsAdmin(studentId === 'admin123');
+    setIsAdmin(phoneNumber === 'admin123');
     localStorage.setItem('cc_user', JSON.stringify(newUser));
     await fetchGlobalData();
   };
@@ -260,7 +260,7 @@ function MainLayout({ user, isAdmin, handleLogout, rooms, subjects, notices, set
             <img src={user.avatar} className="w-10 h-10 rounded-full border border-white/20 p-0.5 group-hover:border-blue-500/50 transition-colors" />
             <div className="flex flex-col min-w-0">
               <span className="text-sm font-bold text-white truncate">{user.name}</span>
-              <span className="text-[10px] text-slate-500 truncate">{user.studentId}</span>
+              <span className="text-[10px] text-slate-500 truncate">{user.phoneNumber}</span>
             </div>
           </div>
           <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl mt-4 text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-all font-medium text-sm">
@@ -272,9 +272,16 @@ function MainLayout({ user, isAdmin, handleLogout, rooms, subjects, notices, set
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col relative overflow-hidden h-full z-10">
-        <header className="md:hidden glass p-5 flex items-center justify-between border-b border-white/5 z-30">
-          <h1 className="text-xl font-bold tracking-tight">Campus<span className="text-blue-400">Connect</span></h1>
-          <img src={user.avatar} className="w-9 h-9 rounded-full ring-2 ring-blue-500/30" />
+        <header className="md:hidden glass p-4 flex items-center justify-between border-b border-white/5 z-30">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+              <Smartphone size={20} className="text-white" />
+            </div>
+            <h1 className="text-lg font-bold tracking-tight">Campus<span className="text-blue-400">Connect</span></h1>
+          </div>
+          <button onClick={handleLogout} className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-red-400">
+            <LogOut size={20} />
+          </button>
         </header>
 
         <section className="flex-1 overflow-y-auto custom-scrollbar relative px-4 py-6 md:p-10">
@@ -307,16 +314,40 @@ function MainLayout({ user, isAdmin, handleLogout, rooms, subjects, notices, set
 
 function LoginScreen({ onLogin }) {
   const [name, setName] = useState('');
-  const [id, setId] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [error, setError] = useState('');
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [success, setSuccess] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (name && id) {
-      onLogin(name, id);
-    } else {
+    setError('');
+
+    if (!name || !phoneNumber) {
       setError('Please fill in all fields');
+      return;
     }
+
+    // Bypass for admin testing
+    if (phoneNumber === 'admin123') {
+      onLogin(name, phoneNumber);
+      return;
+    }
+
+    const phoneRegex = /^[0-9]{10}$/;
+    if (!phoneRegex.test(phoneNumber)) {
+      setError('Please enter a valid 10-digit number');
+      return;
+    }
+
+    setIsAuthenticating(true);
+    // Simulate a smooth auth transition
+    setTimeout(() => {
+      setSuccess(true);
+      setTimeout(() => {
+        onLogin(name, phoneNumber);
+      }, 800);
+    }, 1200);
   };
 
   return (
@@ -341,31 +372,69 @@ function LoginScreen({ onLogin }) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-x-0 space-y-4">
-          <div>
-            <label className="text-xs font-medium text-slate-400 ml-1 mb-1 block">Full Name</label>
-            <input
-              className="glass-input w-full"
-              placeholder="e.g. John Doe"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-slate-400 ml-1 mb-1 block">Student ID</label>
-            <input
-              className="glass-input w-full"
-              placeholder="e.g. STU-101"
-              value={id}
-              onChange={(e) => setId(e.target.value)}
-            />
-            <p className="text-[10px] text-slate-500 mt-1 ml-1">Use 'admin123' for admin access</p>
-          </div>
+          <motion.div animate={success ? { opacity: 0, y: -10 } : { opacity: 1, y: 0 }}>
+            <div>
+              <label className="text-xs font-medium text-slate-400 ml-1 mb-1 block">Full Name</label>
+              <input
+                className="glass-input w-full"
+                placeholder="e.g. John Doe"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <div className="mt-4">
+              <label className="text-xs font-medium text-slate-400 ml-1 mb-1 block">Phone Number</label>
+              <input
+                className="glass-input w-full"
+                placeholder="10-digit number"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                maxLength={10}
+              />
+              <p className="text-[10px] text-slate-500 mt-1 ml-1">Authenticated via 10-digit PIN</p>
+            </div>
 
-          {error && <p className="text-red-400 text-xs text-center">{error}</p>}
+            {error && <p className="text-red-400 text-xs text-center mt-4">{error}</p>}
 
-          <Button type="submit" className="w-full py-4 mt-4 text-sm font-semibold tracking-wide">
-            ENTER PORTAL
-          </Button>
+            <Button
+              type="submit"
+              disabled={isAuthenticating}
+              className="w-full py-4 mt-6 text-sm font-semibold tracking-wide overflow-hidden relative"
+            >
+              {isAuthenticating ? (
+                <motion.div initial={{ y: 20 }} animate={{ y: 0 }} className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  AUTHENTICATING...
+                </motion.div>
+              ) : "ENTER PORTAL"}
+            </Button>
+          </motion.div>
+
+          <AnimatePresence>
+            {success && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="absolute inset-0 flex flex-col items-center justify-center bg-blue-600/10 backdrop-blur-md z-10"
+              >
+                <motion.div
+                  initial={{ rotate: -45, scale: 0 }}
+                  animate={{ rotate: 0, scale: 1 }}
+                  className="w-20 h-20 rounded-full bg-blue-600 flex items-center justify-center shadow-2xl shadow-blue-500/50"
+                >
+                  <Check size={40} className="text-white" />
+                </motion.div>
+                <motion.span
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="mt-4 font-bold text-white tracking-widest text-sm"
+                >
+                  ACCESS GRANTED
+                </motion.span>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </form>
 
         <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between text-[10px] text-slate-500">
@@ -377,16 +446,87 @@ function LoginScreen({ onLogin }) {
   );
 }
 
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const staggerItem = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1
+  }
+};
+
+function NoticeDetailModal({ notice, onClose }) {
+  if (!notice) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-black/80 backdrop-blur-md"
+      />
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0, y: 20 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        className="w-full max-w-lg glass p-8 rounded-3xl border border-white/10 relative z-10 overflow-hidden"
+      >
+        <div className={cn("absolute top-0 left-0 w-full h-1.5",
+          notice.color === 'red' ? "bg-red-500" :
+            notice.color === 'blue' ? "bg-blue-500" : "bg-purple-500")}
+        />
+        <div className="flex justify-between items-start mb-6">
+          <div className="flex items-center gap-3">
+            <div className={cn("p-2 rounded-xl bg-opacity-20",
+              notice.color === 'red' ? "bg-red-500 text-red-400" :
+                notice.color === 'blue' ? "bg-blue-500 text-blue-400" : "bg-purple-500 text-purple-400"
+            )}>
+              <Smartphone size={24} />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-white">{notice.title}</h3>
+              <p className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mt-0.5">Campus Official Notice</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-xl transition-colors text-slate-400"><Plus size={24} className="rotate-45" /></button>
+        </div>
+
+        <div className="space-y-4">
+          <p className="text-slate-300 leading-relaxed text-sm whitespace-pre-wrap">{notice.content}</p>
+          <div className="pt-6 border-t border-white/5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-blue-600/20 flex items-center justify-center text-[10px] font-bold text-blue-400 italic">CC</div>
+              <span className="text-[10px] font-bold text-slate-500">ADMINISTRATION</span>
+            </div>
+            <span className="text-[10px] text-slate-500 font-mono">{new Date(notice.created_at).toLocaleString()}</span>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 function Dashboard() {
   const { user, isAdmin, notices, setNotices } = useOutletContext();
   const navigate = useNavigate();
+  const [selectedNotice, setSelectedNotice] = useState(null);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="space-y-1">
           <h2 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">Hello, {user.name.split(' ')[0]}! 👋</h2>
-          <p className="text-slate-400 font-medium">Here's what's happening on your campus today.</p>
+          <p className="text-slate-400 font-medium tracking-tight">Here's what's happening on your campus today.</p>
         </div>
         <div className="flex gap-3">
           <Button onClick={() => navigate('/chat')} variant="secondary" className="rounded-2xl border-white/10 px-6"><Plus size={18} /> New Message</Button>
@@ -394,53 +534,93 @@ function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <GlassCard className="col-span-1 md:col-span-2 space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <GlassCard className="col-span-1 md:col-span-2 space-y-4 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold flex items-center gap-2"><Smartphone size={20} className="text-blue-400" /> Notice Board</h3>
+            <h3 className="text-lg font-bold flex items-center gap-2"><Smartphone size={20} className="text-blue-400" /> Notice Board</h3>
           </div>
-          <div className="space-y-3">
+          <motion.div
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+            className="space-y-4"
+          >
             {notices.length > 0 ? notices.map(notice => (
-              <div key={notice.id} className="flex items-start gap-4 p-4 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
-                <div className={cn("w-1 h-12 rounded-full mt-1",
+              <motion.div
+                key={notice.id}
+                variants={staggerItem}
+                whileHover={{ x: 4 }}
+                onClick={() => setSelectedNotice(notice)}
+                className="group flex items-start gap-4 p-5 rounded-2xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all cursor-pointer relative overflow-hidden"
+              >
+                <div className={cn("w-1.5 h-12 rounded-full absolute left-0 top-1/2 -translate-y-1/2",
                   notice.color === 'red' ? "bg-red-500" :
                     notice.color === 'blue' ? "bg-blue-500" : "bg-purple-500")}
                 />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <h4 className="text-sm font-bold text-slate-100">{notice.title}</h4>
+                <div className="flex-1 min-w-0 ml-2">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <h4 className="text-sm font-bold text-slate-100 group-hover:text-blue-400 transition-colors">{notice.title}</h4>
                     {isAdmin && (
-                      <div className="flex gap-1 shrink-0">
-                        <button onClick={() => navigate('/admin', { state: { editNotice: notice } })} className="p-1.5 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"><Settings size={14} /></button>
-                        <button onClick={async () => {
+                      <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={(e) => { e.stopPropagation(); navigate('/admin', { state: { editNotice: notice } }); }} className="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-colors"><Settings size={14} /></button>
+                        <button onClick={async (e) => {
+                          e.stopPropagation();
                           if (window.confirm('Delete notice?')) {
                             const { error } = await supabase.from('notices').delete().eq('id', notice.id);
                             if (!error) setNotices(prev => prev.filter(n => n.id !== notice.id));
                           }
-                        }} className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><Trash2 size={14} /></button>
+                        }} className="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><Trash2 size={14} /></button>
                       </div>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">{notice.content}</p>
+                  <p className="text-xs text-slate-400 leading-relaxed line-clamp-2">{notice.content}</p>
                 </div>
-                <span className="text-[10px] text-slate-500 mt-2 block">{new Date(notice.created_at).toLocaleDateString()}</span>
-                <ChevronRight size={16} className="text-slate-600 self-center" />
-              </div>
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  <span className="text-[9px] font-bold text-slate-500 tracking-wider font-mono uppercase">
+                    {new Date(notice.created_at).toLocaleDateString()}
+                  </span>
+                  <ChevronRight size={16} className="text-slate-600 group-hover:text-blue-500 transition-colors" />
+                </div>
+              </motion.div>
             )) : (
-              <div className="text-center py-8 text-slate-500 italic">No active notices</div>
+              <div className="text-center py-12 text-slate-500 italic bg-white/5 rounded-2xl border border-dashed border-white/10">No active notices</div>
             )}
-          </div>
+          </motion.div>
         </GlassCard>
 
-        <GlassCard className="space-y-6">
-          <h3 className="text-lg font-bold flex items-center gap-2 text-white/90"><Plus size={20} className="text-purple-400" /> Pulse Actions</h3>
-          <div className="space-y-3">
-            <ActionButton label="Anonymous Wall" icon={<Ghost size={16} />} onClick={() => navigate('/chat')} />
-            <ActionButton label="Resources" icon={<BookOpen size={16} />} onClick={() => navigate('/subjects')} />
-            <ActionButton label="Live Streams" icon={<Video size={16} />} onClick={() => navigate('/videos')} />
-          </div>
-        </GlassCard>
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          animate="visible"
+          className="space-y-6"
+        >
+          <GlassCard variants={staggerItem} className="space-y-6 p-6">
+            <h3 className="text-lg font-bold flex items-center gap-2 text-white/90"><Plus size={20} className="text-purple-400" /> Pulse Actions</h3>
+            <div className="space-y-3">
+              <ActionButton label="Anonymous Wall" icon={<Ghost size={16} />} onClick={() => navigate('/chat')} />
+              <ActionButton label="Resources" icon={<BookOpen size={16} />} onClick={() => navigate('/subjects')} />
+              <ActionButton label="Live Streams" icon={<Video size={16} />} onClick={() => navigate('/videos')} />
+            </div>
+          </GlassCard>
+
+          <motion.div
+            variants={staggerItem}
+            className="md:hidden glass p-5 rounded-2xl border border-white/5 flex items-center justify-between shadow-xl"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-[11px] font-bold tracking-widest text-slate-400 uppercase">SERVER CONNECTED</span>
+            </div>
+            <div className="text-[10px] font-mono text-slate-500">PORTAL: ACTIVE</div>
+          </motion.div>
+        </motion.div>
       </div>
+
+      <AnimatePresence>
+        {selectedNotice && (
+          <NoticeDetailModal notice={selectedNotice} onClose={() => setSelectedNotice(null)} />
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -1349,7 +1529,7 @@ function AdminPanel() {
               <thead>
                 <tr className="text-[10px] text-slate-500 uppercase tracking-widest border-b border-white/5">
                   <th className="px-6 py-4">Student</th>
-                  <th className="px-6 py-4">ID</th>
+                  <th className="px-6 py-4">Phone Number</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4">Actions</th>
                 </tr>
