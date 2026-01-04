@@ -67,6 +67,11 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   const fetchGlobalData = async () => {
+    if (!supabase.supabaseUrl || supabase.supabaseUrl.includes('your-project')) {
+      console.error("Supabase connection error: Check your .env file!");
+      return;
+    }
+
     const [subRes, roomRes, noticeRes] = await Promise.all([
       supabase.from('subjects').select('*'),
       supabase.from('rooms').select('*'),
@@ -96,7 +101,7 @@ export default function App() {
           const parsed = JSON.parse(storedUser);
           if (parsed.id) {
             setUser(parsed);
-            setIsAdmin(parsed.studentId === 'admin123');
+            setIsAdmin(parsed.isAdmin || parsed.studentId === 'admin123' || parsed.phoneNumber === 'admin123');
             await fetchGlobalData();
           }
         }
@@ -147,7 +152,8 @@ export default function App() {
     const newUser = {
       name,
       phoneNumber,
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`
+      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
+      isAdmin: phoneNumber === 'admin123'
     };
 
     const { data: profile } = await supabase
